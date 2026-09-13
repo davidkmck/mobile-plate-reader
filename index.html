@@ -45,30 +45,59 @@
 
   <!-- 3. App Logic -->
   <script src="app.js"></script>
-  
-  <script>
-    // Initialize stream and models on page load
-    window.addEventListener('DOMContentLoaded', async () => {
-      await startCamera();
-      await initModels();
-      console.log('Models ready');
-    });
+<script>
+  const captureBtn = document.getElementById('capture-btn');
+  const resultsDiv = document.getElementById('results');
 
-    // Wire up capture button
-    document.getElementById('capture-btn').addEventListener('click', async () => {
+  // 1. Immediately start camera feed without waiting for heavy models
+  startCamera().catch(err => {
+    resultsDiv.innerHTML = `<p style="color:red;">Camera access failed: ${err.message}</p>`;
+  });
+
+  // 2. Load models asynchronously in background & update UI status
+  captureBtn.disabled = true;
+  captureBtn.innerText = 'Loading AI Models...';
+
+  initModels().then(() => {
+    captureBtn.disabled = false;
+    captureBtn.innerText = 'Scan Plate';
+    console.log('AI models ready for execution');
+  }).catch(err => {
+    console.error('Initialization error:', err);
+    captureBtn.disabled = false;
+    captureBtn.innerText = 'Scan Plate (Fallback mode)';
+    resultsDiv.innerHTML = `<p style="color:yellow;">Warning: Models failed to preload. Scan may take longer on first click.</p>`;
+  });
+
+  // 3. Handle scan click gracefully
+  captureBtn.addEventListener('click', async () => {
+    try {
+      captureBtn.disabled = true;
+      captureBtn.innerText = 'Analyzing Image...';
+      
       const snapCanvas = captureFrame();
       const results = await processImage(snapCanvas);
-      
-      const resultsDiv = document.getElementById('results');
-      resultsDiv.innerHTML = results.length === 0 
-        ? '<p>No vehicles detected.</p>' 
-        : results.map(r => `<p>🚗 <strong>${r.vehicleType}:</strong> Plate read: <code>${r.licensePlate}</code> (${Math.round(r.textConfidence)}% confidence)</p>`).join('');
-    });
 
-    // Register Service Worker for PWA installation
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+      if (!results || results.length === 0) {
+        resultsDiv.innerHTML = '<p>No vehicles detected in frame.</p>';
+      } else {
+        resultsDiv.innerHTML = results.map(r => 
+          `<p>🚗 <strong>${r.vehicleType}:</strong> Plate read: <code>${r.licensePlate}</code> (${Math.round(r.textConfidence || 0)}% confidence)</p>`
+        ).join('');
+      }
+    } catch (err) {
+      console.error(err);
+      resultsDiv.innerHTML = `<p style="color:red;">Error processing scan: ${err.message}</p>`;
+    } finally {
+      captureBtn.disabled = false;
+      captureBtn.innerText = 'Scan Plate';
     }
-  </script>
+  });
+
+  // Register PWA Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+  }
+</script>
 </body>
 </html>
