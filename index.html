@@ -1,6 +1,68 @@
-<!-- TensorFlow.js & COCO-SSD for Car Detection -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlateScan - PWA</title>
+  
+  <!-- PWA Settings -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
 
-<!-- Tesseract.js for OCR -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- 1. TensorFlow.js & COCO-SSD Model -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+  <!-- 2. Tesseract.js OCR Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    body { font-family: sans-serif; text-align: center; margin: 0; background: #121212; color: white; }
+    #camera-container { position: relative; width: 100vw; max-width: 600px; margin: auto; }
+    video { width: 100%; height: auto; display: block; }
+    button { padding: 12px 24px; font-size: 16px; margin: 15px; border-radius: 8px; border: none; background: #007bff; color: white; cursor: pointer; }
+    #results { margin-top: 20px; text-align: left; padding: 0 20px; }
+  </style>
+</head>
+<body>
+
+  <h2>PlateScan PWA</h2>
+
+  <div id="camera-container">
+    <video id="camera" autoplay playsinline></video>
+    <canvas id="snapshot" style="display:none;"></canvas>
+  </div>
+
+  <button id="capture-btn">Scan Plate</button>
+
+  <div id="results"></div>
+
+  <!-- 3. App Logic -->
+  <script src="app.js"></script>
+  
+  <script>
+    // Initialize stream and models on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+      await startCamera();
+      await initModels();
+      console.log('Models ready');
+    });
+
+    // Wire up capture button
+    document.getElementById('capture-btn').addEventListener('click', async () => {
+      const snapCanvas = captureFrame();
+      const results = await processImage(snapCanvas);
+      
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = results.length === 0 
+        ? '<p>No vehicles detected.</p>' 
+        : results.map(r => `<p>🚗 <strong>${r.vehicleType}:</strong> Plate read: <code>${r.licensePlate}</code> (${Math.round(r.textConfidence)}% confidence)</p>`).join('');
+    });
+
+    // Register Service Worker for PWA installation
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+    }
+  </script>
+</body>
+</html>
