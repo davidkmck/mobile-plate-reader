@@ -6,11 +6,11 @@ async function initModels() {
   // 1. Load object detector (COCO-SSD)
   carDetector = await cocoSsd.load();
 
-  // 2. Load Tesseract worker (v5 compatible initialization)
+  // 2. Load Tesseract worker (v5 string parameter format)
   ocrWorker = await Tesseract.createWorker('eng');
   await ocrWorker.setParameters({
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-    tessedit_pageseg_mode: '7', // Mode 7 = Single Line (uses string '7' to avoid undefined PSM errors)
+    tessedit_pageseg_mode: '7', // Mode 7 = Single text line
   });
 }
 
