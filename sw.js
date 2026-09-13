@@ -1,8 +1,8 @@
-const CACHE_NAME = 'platescan-v2';
+const CACHE_NAME = 'platescan-v3';
 
 // Files required for offline execution
 const ASSETS_TO_CACHE = [
-  '/',
+  './',
   './index.html',
   './app.js',
   './manifest.json',
