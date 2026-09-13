@@ -6,14 +6,13 @@
   <title>Mobile Plate Scan</title>
 
   <!-- PWA Manifest -->
-<link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json">
 
-<!-- iOS Safari Icon Support -->
-<link rel="apple-touch-icon" href="icon.png">
+  <!-- iOS Safari Icon Support -->
+  <link rel="apple-touch-icon" href="icon.png">
 
-<!-- Theme Color for Browser Header -->
-<meta name="theme-color" content="#000000">
-  
+  <!-- Theme Color for Browser Header -->
+  <meta name="theme-color" content="#000000">
 
   <!-- 1. TensorFlow.js & COCO-SSD Model -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
@@ -27,6 +26,7 @@
     #camera-container { position: relative; width: 100vw; max-width: 600px; margin: auto; }
     video { width: 100%; height: auto; display: block; }
     button { padding: 12px 24px; font-size: 16px; margin: 15px; border-radius: 8px; border: none; background: #007bff; color: white; cursor: pointer; }
+    button:disabled { background: #555555; cursor: not-allowed; }
     #results { margin-top: 20px; text-align: left; padding: 0 20px; }
   </style>
 </head>
@@ -45,59 +45,60 @@
 
   <!-- 3. App Logic -->
   <script src="app.js"></script>
-<script>
-  const captureBtn = document.getElementById('capture-btn');
-  const resultsDiv = document.getElementById('results');
+  <script>
+    const captureBtn = document.getElementById('capture-btn');
+    const resultsDiv = document.getElementById('results');
 
-  // 1. Immediately start camera feed without waiting for heavy models
-  startCamera().catch(err => {
-    resultsDiv.innerHTML = `<p style="color:red;">Camera access failed: ${err.message}</p>`;
-  });
+    // 1. Immediately start camera feed without waiting for heavy models
+    startCamera().catch(err => {
+      resultsDiv.innerHTML = `<p style="color:red;">Camera access failed: ${err.message}</p>`;
+    });
 
-  // 2. Load models asynchronously in background & update UI status
-  captureBtn.disabled = true;
-  captureBtn.innerText = 'Loading AI Models...';
+    // 2. Load models asynchronously in background & update UI status
+    captureBtn.disabled = true;
+    captureBtn.innerText = 'Loading AI Models...';
 
-  initModels().then(() => {
-    captureBtn.disabled = false;
-    captureBtn.innerText = 'Scan Plate';
-    console.log('AI models ready for execution');
-  }).catch(err => {
-    console.error('Initialization error:', err);
-    captureBtn.disabled = false;
-    captureBtn.innerText = 'Scan Plate (Fallback mode)';
-    resultsDiv.innerHTML = `<p style="color:yellow;">Warning: Models failed to preload. Scan may take longer on first click.</p>`;
-  });
-
-  // 3. Handle scan click gracefully
-  captureBtn.addEventListener('click', async () => {
-    try {
-      captureBtn.disabled = true;
-      captureBtn.innerText = 'Analyzing Image...';
-      
-      const snapCanvas = captureFrame();
-      const results = await processImage(snapCanvas);
-
-      if (!results || results.length === 0) {
-        resultsDiv.innerHTML = '<p>No vehicles detected in frame.</p>';
-      } else {
-        resultsDiv.innerHTML = results.map(r => 
-          `<p>🚗 <strong>${r.vehicleType}:</strong> Plate read: <code>${r.licensePlate}</code> (${Math.round(r.textConfidence || 0)}% confidence)</p>`
-        ).join('');
-      }
-    } catch (err) {
-      console.error(err);
-      resultsDiv.innerHTML = `<p style="color:red;">Error processing scan: ${err.message}</p>`;
-    } finally {
+    initModels().then(() => {
       captureBtn.disabled = false;
       captureBtn.innerText = 'Scan Plate';
-    }
-  });
+      console.log('AI models ready for execution');
+    }).catch(err => {
+      console.error('Initialization error:', err);
+      captureBtn.disabled = false;
+      captureBtn.innerText = 'Scan Plate (Fallback mode)';
+      resultsDiv.innerHTML = `<p style="color:yellow;">Warning: Models failed to preload. Scan may take longer on first click.</p>`;
+    });
 
-  // Register PWA Service Worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
-  }
-</script>
+    // 3. Handle scan click gracefully
+    captureBtn.addEventListener('click', async () => {
+      try {
+        captureBtn.disabled = true;
+        captureBtn.innerText = 'Analyzing Image...';
+        resultsDiv.innerHTML = '<p>Processing frame...</p>';
+        
+        const snapCanvas = captureFrame();
+        const results = await processImage(snapCanvas);
+
+        if (!results || results.length === 0) {
+          resultsDiv.innerHTML = '<p>No vehicles detected in frame.</p>';
+        } else {
+          resultsDiv.innerHTML = results.map(r => 
+            `<p>🚗 <strong>${r.vehicleType}:</strong> Plate read: <code>${r.licensePlate}</code> (${Math.round(r.textConfidence || 0)}% confidence)</p>`
+          ).join('');
+        }
+      } catch (err) {
+        console.error('Scan error:', err);
+        resultsDiv.innerHTML = `<p style="color:red;">Error processing scan: ${err.message}</p>`;
+      } finally {
+        captureBtn.disabled = false;
+        captureBtn.innerText = 'Scan Plate';
+      }
+    });
+
+    // Register PWA Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+    }
+  </script>
 </body>
 </html>
