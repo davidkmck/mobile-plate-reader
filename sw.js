@@ -1,13 +1,13 @@
-const CACHE_NAME = 'platescan-v1';
+const CACHE_NAME = 'platescan-v2';
 
 // Files required for offline execution
 const ASSETS_TO_CACHE = [
   '/',
-  '/index.html',
-  '/app.js',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon.png',
+  './index.html',
+  './app.js',
+  './manifest.json',
+  './icon-192.png',
+  './icon.png',
   // CDN dependencies cached locally on first load
   'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs',
   'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd',
