@@ -66,7 +66,7 @@
       console.error('Initialization error:', err);
       captureBtn.disabled = false;
       captureBtn.innerText = 'Scan Plate (Fallback mode)';
-      resultsDiv.innerHTML = `<p style="color:yellow;">Warning: Models failed to preload. Scan may take longer on first click.</p>`;
+      resultsDiv.innerHTML = `<p style="color:yellow;">Warning: Models failed to preload. ${err.message}</p>`;
     });
 
     // 3. Handle scan click gracefully
@@ -95,7 +95,7 @@
       }
     });
 
-    // Register PWA Service Worker
+    // Register PWA Service Worker with relative path
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration failed:', err));
     }
