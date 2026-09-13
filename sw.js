@@ -7,7 +7,7 @@ const ASSETS_TO_CACHE = [
   '/app.js',
   '/manifest.json',
   '/icon-192.png',
-  '/icon-512.png',
+  '/icon.png',
   // CDN dependencies cached locally on first load
   'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs',
   'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd',
