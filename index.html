@@ -1,136 +1,115 @@
-let carDetector = null;
-let ocrWorker = null;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mobile Plate Scan</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.png">
+  <meta name="theme-color" content="#000000">
 
-function debugLog(msg) {
-  const logDiv = document.getElementById('debug-log');
-  if (logDiv) logDiv.innerHTML += `<br>> ${msg}`;
-  console.log(msg);
-}
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-async function initModels() {
-  try {
-    debugLog("Initializing TF backend...");
-    await tf.ready(); // Explicitly wait for mobile GPU
-
-    debugLog("Loading COCO-SSD object detector...");
-    carDetector = await cocoSsd.load();
-
-    debugLog("Loading Tesseract OCR...");
-    ocrWorker = await Tesseract.createWorker('eng');
-    await ocrWorker.setParameters({
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-      tessedit_pageseg_mode: '7',
-    });
+  <style>
+    body { font-family: sans-serif; text-align: center; margin: 0; background: #121212; color: white; }
     
-    debugLog("AI Models fully loaded and ready.");
-    return true;
-  } catch (err) {
-    debugLog(`Init Error: ${err.message}`);
-    throw err;
-  }
-}
-
-async function startCamera() {
-  const video = document.getElementById('camera');
-  try {
-    debugLog("Requesting environment camera...");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { exact: 'environment' } }
-    });
-    video.srcObject = stream;
-  } catch (err) {
-    debugLog("Environment camera failed. Using fallback...");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
-    } catch (fallbackErr) {
-      debugLog(`Camera Error: ${fallbackErr.message}`);
+    /* Updated Controls container with Flexbox for stacking */
+    #controls { 
+      padding: 15px; 
+      background: #1e1e1e; 
+      position: sticky; 
+      top: 0; 
+      z-index: 10; 
+      border-bottom: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
     }
-  }
-}
+    
+    button { padding: 14px 28px; font-size: 18px; font-weight: bold; width: 100%; max-width: 400px; border-radius: 8px; border: none; background: #007bff; color: white; cursor: pointer; }
+    button:disabled { background: #555555; cursor: not-allowed; }
+    
+    /* Moved results styling to fit the header */
+    #results { font-size: 18px; font-weight: bold; color: #00ff00; width: 100%; }
+    #results p { margin: 5px 0; }
+    
+    #camera-container { position: relative; width: 100vw; max-width: 600px; margin: auto; }
+    video { width: 100%; height: auto; display: block; }
+    #debug-log { margin-top: 20px; padding: 10px; font-family: monospace; font-size: 12px; color: #00ff00; text-align: left; background: #000; }
+  </style>
+</head>
+<body>
 
-function captureFrame() {
-  const video = document.getElementById('camera');
-  const canvas = document.getElementById('snapshot');
-  
-  const width = video.videoWidth || 640;
-  const height = video.videoHeight || 480;
-  
-  canvas.width = width;
-  canvas.height = height;
-  
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(video, 0, 0, width, height);
-  return canvas;
-}
+  <!-- Controls and Results now share the fixed top bar -->
+  <div id="controls">
+    <button id="capture-btn" disabled>Loading AI Models...</button>
+    <div id="results"></div>
+  </div>
 
-async function processImage(canvasElement) {
-  if (!carDetector || !ocrWorker) {
-    throw new Error('AI Models are still loading.');
-  }
+  <div id="camera-container">
+    <video id="camera" autoplay playsinline muted></video>
+    <canvas id="snapshot" style="display:none;"></canvas>
+  </div>
 
-  const predictions = await carDetector.detect(canvasElement);
-  const vehicleClasses = ['car', 'truck', 'bus'];
-  const cars = predictions.filter(p => vehicleClasses.includes(p.class) && p.score > 0.4);
+  <div id="debug-log">System Booting...</div>
 
-  if (cars.length === 0) return [];
+  <script src="app.js"></script>
+  <script>
+    const captureBtn = document.getElementById('capture-btn');
+    const resultsDiv = document.getElementById('results');
+    const video = document.getElementById('camera');
 
-  const results = [];
+    // Startup Execution
+    (async function setup() {
+      await startCamera();
+      try {
+        await initModels();
+        captureBtn.disabled = false;
+        captureBtn.innerText = 'Scan Plate';
+      } catch (e) {
+        captureBtn.innerText = 'Error Loading AI';
+      }
+    })();
 
-  for (const car of cars) {
-    const [x, y, width, height] = car.bbox;
+    // Button Listener
+    captureBtn.addEventListener('click', async () => {
+      video.pause();
+      captureBtn.disabled = true;
+      captureBtn.innerText = 'Scanning...';
+      resultsDiv.innerHTML = '<p style="color:#007bff;">Processing image...</p>';
+      
+      try {
+        debugLog("Scan triggered. Capturing frame...");
+        const snapCanvas = captureFrame();
+        
+        debugLog("Analyzing frame...");
+        const results = await processImage(snapCanvas);
 
-    // Crop Plate ROI (Lower center)
-    const plateCrop = {
-      x: Math.max(0, x + width * 0.15),
-      y: Math.max(0, y + height * 0.5),
-      width: Math.min(canvasElement.width, width * 0.7),
-      height: Math.min(canvasElement.height, height * 0.45)
-    };
-
-    const plateCanvas = document.createElement('canvas');
-    plateCanvas.width = Math.max(1, plateCrop.width);
-    plateCanvas.height = Math.max(1, plateCrop.height);
-    const ctx = plateCanvas.getContext('2d', { willReadFrequently: true });
-
-    ctx.drawImage(
-      canvasElement,
-      plateCrop.x, plateCrop.y, plateCrop.width, plateCrop.height,
-      0, 0, plateCanvas.width, plateCanvas.height
-    );
-
-    preprocessPlateImage(ctx, plateCanvas.width, plateCanvas.height);
-
-    const { data: { text, confidence } } = await ocrWorker.recognize(plateCanvas);
-    const cleanPlateText = text.replace(/[^A-Z0-9]/g, '').trim();
-
-    results.push({
-      vehicleType: car.class,
-      licensePlate: cleanPlateText.length >= 3 ? cleanPlateText : 'Unreadable',
-      textConfidence: confidence
+        if (!results || results.length === 0) {
+          resultsDiv.innerHTML = '<p style="color:yellow;">No vehicles detected.</p>';
+          debugLog("Scan complete: No cars found.");
+        } else {
+          resultsDiv.innerHTML = results.map(r => 
+            `<p>🚗 <strong>${r.vehicleType}:</strong> <code>${r.licensePlate}</code> (${Math.round(r.textConfidence)}%)</p>`
+          ).join('');
+          debugLog("Scan complete: Vehicle processed.");
+        }
+      } catch (err) {
+        debugLog(`Scan Error: ${err.message}`);
+        resultsDiv.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
+      } finally {
+        video.play();
+        captureBtn.disabled = false;
+        captureBtn.innerText = 'Scan Plate';
+      }
     });
-  }
 
-  return results;
-}
-
-function preprocessPlateImage(ctx, width, height) {
-  const imgData = ctx.getImageData(0, 0, width, height);
-  const d = imgData.data;
-
-  let min = 255, max = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    d[i] = gray;
-    if (gray < min) min = gray;
-    if (gray > max) max = gray;
-  }
-
-  const range = max - min || 1;
-  for (let i = 0; i < d.length; i += 4) {
-    const binarized = (((d[i] - min) / range) * 255) > 128 ? 255 : 0;
-    d[i] = d[i + 1] = d[i + 2] = binarized;
-  }
-
-  ctx.putImageData(imgData, 0, 0);
-}
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(err => debugLog('SW Error: ' + err.message));
+    }
+  </script>
+</body>
+</html>
