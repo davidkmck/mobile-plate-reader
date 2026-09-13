@@ -1,4 +1,4 @@
-const CACHE_NAME = 'platescan-v6';
+const CACHE_NAME = 'platescan-v7';
 
 const ASSETS_TO_CACHE = [
   './',
