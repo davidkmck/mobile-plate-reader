@@ -3,18 +3,18 @@ let ocrWorker;
 
 // Initialize ML models locally
 async function initModels() {
-  // Load local car detection model (COCO-SSD)
+  // 1. Load object detector (COCO-SSD)
   carDetector = await cocoSsd.load();
 
-  // Initialize Tesseract worker with parameters
+  // 2. Load Tesseract worker (v5 compatible initialization)
   ocrWorker = await Tesseract.createWorker('eng');
   await ocrWorker.setParameters({
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE, // Force single line mode for plates
+    tessedit_pageseg_mode: '7', // Mode 7 = Single Line (uses string '7' to avoid undefined PSM errors)
   });
 }
 
-// Full execution pipeline
+// Main execution pipeline
 async function processImage(canvasElement) {
   if (!carDetector || !ocrWorker) {
     throw new Error('Models not initialized. Call initModels() first.');
@@ -30,7 +30,7 @@ async function processImage(canvasElement) {
   for (const car of cars) {
     const [x, y, width, height] = car.bbox;
 
-    // Step 2: Estimate License Plate Region (Lower 40% center of vehicle)
+    // Step 2: Estimate License Plate Region (Lower center of vehicle)
     const plateCrop = {
       x: Math.max(0, x + width * 0.2),
       y: Math.max(0, y + height * 0.55),
@@ -40,18 +40,18 @@ async function processImage(canvasElement) {
 
     // Step 3: Crop Plate ROI to Offscreen Canvas
     const plateCanvas = document.createElement('canvas');
-    plateCanvas.width = plateCrop.width;
-    plateCanvas.height = plateCrop.height;
+    plateCanvas.width = Math.max(1, plateCrop.width);
+    plateCanvas.height = Math.max(1, plateCrop.height);
     const ctx = plateCanvas.getContext('2d');
 
     ctx.drawImage(
       canvasElement,
       plateCrop.x, plateCrop.y, plateCrop.width, plateCrop.height,
-      0, 0, plateCrop.width, plateCrop.height
+      0, 0, plateCanvas.width, plateCanvas.height
     );
 
-    // Pre-process for OCR (Contrast Boost & Grayscale)
-    preprocessPlateImage(ctx, plateCrop.width, plateCrop.height);
+    // Pre-process for OCR
+    preprocessPlateImage(ctx, plateCanvas.width, plateCanvas.height);
 
     // Step 4: Run Targeted OCR
     const { data: { text, confidence } } = await ocrWorker.recognize(plateCanvas);
@@ -69,12 +69,11 @@ async function processImage(canvasElement) {
   return results;
 }
 
-// Improved Preprocessing: Grayscale & Contrast Stretching
+// Image preprocessing for OCR
 function preprocessPlateImage(ctx, width, height) {
   const imgData = ctx.getImageData(0, 0, width, height);
   const d = imgData.data;
 
-  // Pass 1: Convert to Grayscale & Calculate Min/Max Brightness
   let min = 255;
   let max = 0;
   for (let i = 0; i < d.length; i += 4) {
@@ -84,11 +83,9 @@ function preprocessPlateImage(ctx, width, height) {
     if (gray > max) max = gray;
   }
 
-  // Pass 2: Contrast Stretching Normalization
   const range = max - min || 1;
   for (let i = 0; i < d.length; i += 4) {
     const normalized = ((d[i] - min) / range) * 255;
-    // High contrast thresholding
     const binarized = normalized > 128 ? 255 : 0;
     d[i] = binarized;
     d[i + 1] = binarized;
@@ -114,9 +111,9 @@ async function startCamera() {
 }
 
 function captureFrame() {
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
