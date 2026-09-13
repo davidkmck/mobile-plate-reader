@@ -23,45 +23,47 @@
 
   <style>
     body { font-family: sans-serif; text-align: center; margin: 0; background: #121212; color: white; }
+    #controls { padding: 10px; background: #1e1e1e; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #333; }
     #camera-container { position: relative; width: 100vw; max-width: 600px; margin: auto; }
     video { width: 100%; height: auto; display: block; }
-    button { padding: 12px 24px; font-size: 16px; margin: 15px; border-radius: 8px; border: none; background: #007bff; color: white; cursor: pointer; }
+    button { padding: 14px 28px; font-size: 18px; font-weight: bold; width: 90%; max-width: 400px; border-radius: 8px; border: none; background: #007bff; color: white; cursor: pointer; }
     button:disabled { background: #555555; cursor: not-allowed; }
-    #results { margin-top: 20px; text-align: left; padding: 0 20px; }
+    #results { margin-top: 15px; text-align: left; padding: 0 20px; }
   </style>
 </head>
 <body>
 
-  <h2>PlateScan PWA</h2>
+  <!-- Controls fixed at the top -->
+  <div id="controls">
+    <button id="capture-btn">Scan Plate</button>
+  </div>
 
   <div id="camera-container">
     <video id="camera" autoplay playsinline></video>
     <canvas id="snapshot" style="display:none;"></canvas>
   </div>
 
-  <button id="capture-btn">Scan Plate</button>
-
   <div id="results"></div>
 
-  <!-- 3. App Logic -->
+  <!-- App Logic -->
   <script src="app.js"></script>
   <script>
     const captureBtn = document.getElementById('capture-btn');
     const resultsDiv = document.getElementById('results');
 
-    // 1. Immediately start camera feed without waiting for heavy models
+    // 1. Start camera feed immediately
     startCamera().catch(err => {
       resultsDiv.innerHTML = `<p style="color:red;">Camera access failed: ${err.message}</p>`;
     });
 
-    // 2. Load models asynchronously in background & update UI status
+    // 2. Load ML models in background
     captureBtn.disabled = true;
     captureBtn.innerText = 'Loading AI Models...';
 
     initModels().then(() => {
       captureBtn.disabled = false;
       captureBtn.innerText = 'Scan Plate';
-      console.log('AI models ready for execution');
+      console.log('AI models ready');
     }).catch(err => {
       console.error('Initialization error:', err);
       captureBtn.disabled = false;
@@ -69,7 +71,7 @@
       resultsDiv.innerHTML = `<p style="color:yellow;">Warning: Models failed to preload. ${err.message}</p>`;
     });
 
-    // 3. Handle scan click gracefully
+    // 3. Scan execution
     captureBtn.addEventListener('click', async () => {
       try {
         captureBtn.disabled = true;
@@ -95,7 +97,7 @@
       }
     });
 
-    // Register PWA Service Worker with relative path
+    // Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration failed:', err));
     }
