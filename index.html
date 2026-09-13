@@ -2,96 +2,91 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Mobile Plate Scan</title>
-
-  <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.png">
   <meta name="theme-color" content="#000000">
 
-  <!-- ML Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <style>
     body { font-family: sans-serif; text-align: center; margin: 0; background: #121212; color: white; }
-    #controls { padding: 12px; background: #1e1e1e; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #333; }
+    #controls { padding: 15px; background: #1e1e1e; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #333; }
     #camera-container { position: relative; width: 100vw; max-width: 600px; margin: auto; }
     video { width: 100%; height: auto; display: block; }
-    button { padding: 14px 28px; font-size: 18px; font-weight: bold; width: 90%; max-width: 400px; border-radius: 8px; border: none; background: #007bff; color: white; cursor: pointer; }
+    button { padding: 14px 28px; font-size: 18px; font-weight: bold; width: 100%; max-width: 400px; border-radius: 8px; border: none; background: #007bff; color: white; cursor: pointer; }
     button:disabled { background: #555555; cursor: not-allowed; }
-    #results { margin-top: 15px; text-align: left; padding: 0 20px; }
+    #results { margin-top: 15px; text-align: left; padding: 0 20px; font-size: 18px; }
+    #debug-log { margin-top: 20px; padding: 10px; font-family: monospace; font-size: 12px; color: #00ff00; text-align: left; background: #000; }
   </style>
 </head>
 <body>
 
-  <!-- Fixed Top Header -->
   <div id="controls">
-    <button id="capture-btn">Scan Plate</button>
+    <button id="capture-btn" disabled>Loading AI Models...</button>
   </div>
 
   <div id="camera-container">
-    <video id="camera" autoplay playsinline></video>
+    <video id="camera" autoplay playsinline muted></video>
     <canvas id="snapshot" style="display:none;"></canvas>
   </div>
 
   <div id="results"></div>
+  <div id="debug-log">System Booting...</div>
 
-  <!-- Main App Script -->
   <script src="app.js"></script>
   <script>
     const captureBtn = document.getElementById('capture-btn');
     const resultsDiv = document.getElementById('results');
 
-    // 1. Initialize camera
-    startCamera().catch(err => {
-      resultsDiv.innerHTML = `<p style="color:red;">Camera Error: ${err.message}</p>`;
-    });
-
-    // 2. Load models
-    captureBtn.disabled = true;
-    captureBtn.innerText = 'Loading AI Models...';
-
-    initModels().then(() => {
-      captureBtn.disabled = false;
-      captureBtn.innerText = 'Scan Plate';
-    }).catch(err => {
-      captureBtn.disabled = false;
-      captureBtn.innerText = 'Scan Plate (Error)';
-      resultsDiv.innerHTML = `<p style="color:red;">Failed to load AI models: ${err.message}</p>`;
-    });
-
-    // 3. Capture event handler
-    captureBtn.addEventListener('click', async () => {
+    // Startup Execution
+    (async function setup() {
+      await startCamera();
       try {
-        captureBtn.disabled = true;
-        captureBtn.innerText = 'Analyzing Image...';
-        resultsDiv.innerHTML = '<p style="color:#007bff;">Processing image scan...</p>';
-        
+        await initModels();
+        captureBtn.disabled = false;
+        captureBtn.innerText = 'Scan Plate';
+      } catch (e) {
+        captureBtn.innerText = 'Error Loading AI';
+      }
+    })();
+
+    // Button Listener
+    captureBtn.addEventListener('click', async () => {
+      captureBtn.disabled = true;
+      captureBtn.innerText = 'Scanning...';
+      resultsDiv.innerHTML = '<p style="color:#007bff;">Processing image...</p>';
+      
+      try {
+        debugLog("Scan triggered. Capturing frame...");
         const snapCanvas = captureFrame();
+        
+        debugLog("Analyzing frame...");
         const results = await processImage(snapCanvas);
 
         if (!results || results.length === 0) {
-          resultsDiv.innerHTML = '<p>No vehicles detected in frame.</p>';
+          resultsDiv.innerHTML = '<p>No vehicles detected.</p>';
+          debugLog("Scan complete: No cars found.");
         } else {
           resultsDiv.innerHTML = results.map(r => 
-            `<p>🚗 <strong>${r.vehicleType}:</strong> Plate: <code>${r.licensePlate}</code> (${Math.round(r.textConfidence || 0)}% confidence)</p>`
+            `<p>🚗 <strong>${r.vehicleType}:</strong> Plate: <code>${r.licensePlate}</code> (${Math.round(r.textConfidence)}%)</p>`
           ).join('');
+          debugLog("Scan complete: Vehicle processed.");
         }
       } catch (err) {
-        console.error(err);
-        resultsDiv.innerHTML = `<p style="color:red;">Scan Error: ${err.message}</p>`;
+        debugLog(`Scan Error: ${err.message}`);
+        resultsDiv.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
       } finally {
         captureBtn.disabled = false;
         captureBtn.innerText = 'Scan Plate';
       }
     });
 
-    // PWA SW
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration error:', err));
+      navigator.serviceWorker.register('./sw.js').catch(err => debugLog('SW Error: ' + err.message));
     }
   </script>
 </body>
