@@ -1,4 +1,4 @@
-const CACHE_NAME = 'platescan-v4';
+const CACHE_NAME = 'platescan-v5';
 
 // Files required for offline execution
 const ASSETS_TO_CACHE = [
